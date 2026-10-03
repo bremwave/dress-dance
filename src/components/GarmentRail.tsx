@@ -156,39 +156,57 @@ function Garment({ product, index, selected, onFocus, onSelect }: {
   );
 }
 
-function RailScene({ selected, onFocus, onSelect }: {
+function RailScene({ selected, railOffset, dragDelta, onFocus, onSelect }: {
   selected: number | null;
+  railOffset: number;
+  dragDelta: number;
   onFocus: (index: number | null) => void;
   onSelect: (index: number) => void;
 }) {
-  const { viewport } = useThree();
+  const { viewport, size } = useThree();
+  const garments = useRef<THREE.Group>(null);
+  const isMobile = size.width < 700;
   const collectionWidth = 11.7;
-  const fit = Math.min(1, (viewport.width - 0.5) / collectionWidth);
+  const fit = isMobile ? 0.94 : Math.min(1, (viewport.width - 0.5) / collectionWidth);
+  const dragWorld = dragDelta * (viewport.width / size.width) / fit;
+
+  useFrame((_, rawDelta) => {
+    const delta = Math.min(rawDelta, 0.05);
+    if (!garments.current) return;
+    garments.current.position.x = THREE.MathUtils.damp(
+      garments.current.position.x,
+      selected === null ? railOffset + dragWorld : 0,
+      dragDelta === 0 ? 10 : 24,
+      delta,
+    );
+  });
 
   return (
     <group scale={selected === null ? fit : Math.min(1, viewport.width / 7.4)}>
-      <mesh position={[0, 1.18, -0.32]} rotation-z={Math.PI / 2} castShadow>
+      <mesh position={[0, 0.84, -0.32]} rotation-z={Math.PI / 2} castShadow>
         <cylinderGeometry args={[0.045, 0.045, 12.1, 24]} />
         <meshStandardMaterial color="#969a96" metalness={0.85} roughness={0.22} />
       </mesh>
-      <mesh position={[-6.02, 1.18, -0.3]}>
+      <mesh position={[-6.02, 0.84, -0.3]}>
         <boxGeometry args={[0.16, 0.5, 0.18]} />
         <meshStandardMaterial color="#b5b7b2" metalness={0.7} roughness={0.28} />
       </mesh>
-      <mesh position={[6.02, 1.18, -0.3]}>
+      <mesh position={[6.02, 0.84, -0.3]}>
         <boxGeometry args={[0.16, 0.5, 0.18]} />
         <meshStandardMaterial color="#b5b7b2" metalness={0.7} roughness={0.28} />
       </mesh>
-      {products.map((product, index) => (
-        <Garment
-          key={product.name}
-          product={product}
-          index={index}
-          selected={selected}
-          onFocus={onFocus}
-          onSelect={onSelect}
-        />
-      ))}
+      <group ref={garments}>
+        {products.map((product, index) => (
+          <Garment
+            key={product.name}
+            product={product}
+            index={index}
+            selected={selected}
+            onFocus={onFocus}
+            onSelect={onSelect}
+          />
+        ))}
+      </group>
       <Environment>
         <Lightformer intensity={2.4} position={[0, 5, 4]} scale={[10, 4, 1]} />
         <Lightformer intensity={1.2} position={[-5, 1, 2]} rotation-y={Math.PI / 2} scale={[8, 2, 1]} />
@@ -228,7 +246,12 @@ function ProductInfo({ index, onClose, onStep }: {
 export function GarmentRail() {
   const [focused, setFocused] = useState<number | null>(null);
   const [selected, setSelected] = useState<number | null>(null);
-  const active = selected ?? focused ?? 0;
+  const [railOffset, setRailOffset] = useState(0);
+  const [dragDelta, setDragDelta] = useState(0);
+  const [mobileIndex, setMobileIndex] = useState(0);
+  const pointerStart = useRef<number | null>(null);
+  const dragged = useRef(false);
+  const active = selected ?? focused ?? mobileIndex;
   const activeProduct = products[active] ?? products[0];
   if (!activeProduct) return null;
 
@@ -247,8 +270,47 @@ export function GarmentRail() {
     setSelected((selected + direction + products.length) % products.length);
   };
 
+  const finishDrag = () => {
+    if (pointerStart.current === null) return;
+    const mobile = window.innerWidth < 700;
+    if (mobile && Math.abs(dragDelta) > 32) {
+      const next = Math.max(0, Math.min(products.length - 1, mobileIndex + (dragDelta < 0 ? 1 : -1)));
+      setMobileIndex(next);
+      setRailOffset(-((next - (products.length - 1) / 2) * 1.42));
+    } else if (!mobile) {
+      const nextOffset = Math.max(-3.4, Math.min(3.4, railOffset + dragDelta * 0.011));
+      setRailOffset(nextOffset);
+      setMobileIndex(Math.max(0, Math.min(products.length - 1, Math.round((products.length - 1) / 2 - nextOffset / 1.42))));
+    }
+    setDragDelta(0);
+    pointerStart.current = null;
+    window.setTimeout(() => { dragged.current = false; }, 0);
+  };
+
+  useEffect(() => {
+    if (window.innerWidth < 700) {
+      setRailOffset((products.length - 1) / 2 * 1.42);
+    }
+  }, []);
+
   return (
-    <main className="rail-shell">
+    <main
+      className="rail-shell"
+      onPointerDown={(event) => {
+        if (selected !== null) return;
+        pointerStart.current = event.clientX;
+        dragged.current = false;
+        event.currentTarget.setPointerCapture(event.pointerId);
+      }}
+      onPointerMove={(event) => {
+        if (pointerStart.current === null || selected !== null) return;
+        const distance = event.clientX - pointerStart.current;
+        if (Math.abs(distance) > 5) dragged.current = true;
+        setDragDelta(distance);
+      }}
+      onPointerUp={finishDrag}
+      onPointerCancel={finishDrag}
+    >
       <div className="dot-field" aria-hidden="true" />
       <Canvas
         className="rail-canvas"
@@ -260,7 +322,15 @@ export function GarmentRail() {
       >
         <ambientLight intensity={1.1} />
         <directionalLight position={[4, 7, 7]} intensity={1.8} castShadow shadow-mapSize-width={1024} shadow-mapSize-height={1024} />
-        <RailScene selected={selected} onFocus={setFocused} onSelect={setSelected} />
+        <RailScene
+          selected={selected}
+          railOffset={railOffset}
+          dragDelta={dragDelta}
+          onFocus={setFocused}
+          onSelect={(index) => {
+            if (!dragged.current) setSelected(index);
+          }}
+        />
       </Canvas>
 
       <header className="site-header">

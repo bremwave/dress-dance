@@ -153,7 +153,8 @@
 }
 
 @layer components {
-  .rail-shell { position: relative; min-height: 100svh; overflow: hidden; background: var(--background); }
+  .rail-shell { position: relative; min-height: 100svh; overflow: hidden; background: var(--background); touch-action: none; user-select: none; cursor: grab; }
+  .rail-shell:active { cursor: grabbing; }
   .dot-field { position: absolute; inset: 0; background-image: radial-gradient(circle, var(--dot) 1px, transparent 1.5px); background-size: 38px 38px; background-position: 13px 15px; opacity: .78; }
   .rail-canvas { position: absolute !important; inset: 0; }
   .site-header { position: absolute; inset: 0 0 auto; z-index: 20; display: grid; grid-template-columns: 1fr auto 1fr; align-items: start; padding: 1.25rem 1.5rem; pointer-events: none; }
@@ -190,6 +191,7 @@
   .detail-next { right: .85rem; }
   .detail-close { top: 3.4rem; right: .85rem; }
   .dot-field { background-size: 30px 30px; }
+  .rail-caption h1 { font-size: 1.3rem; }
 }
 
 @media (prefers-reduced-motion: reduce) {
