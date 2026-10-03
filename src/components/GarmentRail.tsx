@@ -108,10 +108,14 @@ function Garment({ product, index, selected, onFocus, onSelect }: {
     node.scale.setScalar(THREE.MathUtils.damp(node.scale.x, targetScale, 7, delta));
     node.rotation.y = rotation.current;
     node.rotation.z = Math.sin(clock.elapsedTime * 1.7 + index) * 0.008 * hoverAmount.current;
-    mat.uniforms.uTime.value = clock.elapsedTime;
-    mat.uniforms.uHover.value = hoverAmount.current;
-    mat.uniforms.uAlpha.value = THREE.MathUtils.damp(
-      mat.uniforms.uAlpha.value,
+    const timeUniform = mat.uniforms["uTime"];
+    const hoverUniform = mat.uniforms["uHover"];
+    const alphaUniform = mat.uniforms["uAlpha"];
+    if (!timeUniform || !hoverUniform || !alphaUniform) return;
+    timeUniform.value = clock.elapsedTime;
+    hoverUniform.value = hoverAmount.current;
+    alphaUniform.value = THREE.MathUtils.damp(
+      alphaUniform.value,
       selected === null || isSelected ? 1 : 0.08,
       8,
       delta,
@@ -163,7 +167,7 @@ function RailScene({ selected, onFocus, onSelect }: {
 
   return (
     <group scale={selected === null ? fit : Math.min(1, viewport.width / 7.4)}>
-      <mesh position={[0, 1.18, -0.32]} castShadow>
+      <mesh position={[0, 1.18, -0.32]} rotation-z={Math.PI / 2} castShadow>
         <cylinderGeometry args={[0.045, 0.045, 12.1, 24]} />
         <meshStandardMaterial color="#969a96" metalness={0.85} roughness={0.22} />
       </mesh>
@@ -198,7 +202,8 @@ function ProductInfo({ index, onClose, onStep }: {
   onClose: () => void;
   onStep: (direction: number) => void;
 }) {
-  const product = products[index];
+  const product = products[index] ?? products[0];
+  if (!product) return null;
   return (
     <div className="detail-layer" aria-label={`${product.name} product detail`}>
       <button className="icon-button detail-close" onClick={onClose} aria-label="Close product detail">
@@ -224,6 +229,8 @@ export function GarmentRail() {
   const [focused, setFocused] = useState<number | null>(null);
   const [selected, setSelected] = useState<number | null>(null);
   const active = selected ?? focused ?? 0;
+  const activeProduct = products[active] ?? products[0];
+  if (!activeProduct) return null;
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -264,8 +271,8 @@ export function GarmentRail() {
 
       {selected === null ? (
         <section className="rail-caption" aria-live="polite">
-          <p className="edition">{products[active].edition}</p>
-          <h1>{products[active].name}</h1>
+          <p className="edition">{activeProduct.edition}</p>
+          <h1>{activeProduct.name}</h1>
           <button className="outline-button" onClick={() => setSelected(active)}>View piece</button>
         </section>
       ) : (
